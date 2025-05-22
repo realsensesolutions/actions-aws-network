@@ -5,17 +5,12 @@ locals {
   }
 }
 
-terraform {
-  backend "s3" {}
-  required_providers {
-    aws = {
-      version = "~> 4.59.0"
-    }
-  }
-
-}
-
 provider "aws" {
   region = "us-east-1"
+}
+terraform {
+  backend "s3" {
+    region = "us-east-1"
+  }
 }
 
