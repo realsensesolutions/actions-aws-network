@@ -28,8 +28,7 @@ jobs:
 
       - uses: ./
         with:
-          action: apply
-          force-apply: true
+          action: destroy
 
       - run: |
           echo "${{ steps.backend.outputs.s3 }} - ${{ steps.backend.outputs.dynamodb }}"
