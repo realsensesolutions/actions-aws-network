@@ -6,13 +6,13 @@ locals {
 }
 
 terraform {
-  backend "local" {}
+  backend "s3" {}
   required_providers {
     aws = {
       version = "~> 4.59.0"
     }
   }
-  
+
 }
 
 provider "aws" {

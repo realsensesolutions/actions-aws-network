@@ -151,10 +151,28 @@ runs:
         echo "TF_VAR_sg_private_id=$private_sg" >> $GITHUB_ENV
         echo "public_id=$public_sg" >> $GITHUB_OUTPUT
         echo "private_id=$private_sg" >> $GITHUB_OUTPUT
-    - name: init
+    - name: Terraform init for apply/plan
       shell: bash
+      if: ${{ inputs.action != 'destroy' }}
       working-directory: ${{ github.action_path }}
-      run: terraform init
+      env:
+        TF_BACKEND_key: "actions-aws-network/${{ env.INSTANCE_NAME }}"
+      run: |
+        terraform init \
+          -backend-config="bucket=$TF_BACKEND_s3" \
+          -backend-config="dynamodb_table=$TF_BACKEND_dynamodb" \
+          -backend-config="key=$TF_BACKEND_key"
+    - name: Terraform init for destroy
+      shell: bash
+      if: ${{ inputs.action == 'destroy' }}
+      working-directory: ${{ github.action_path }}
+      env:
+        TF_BACKEND_key: "actions-aws-network/${{ env.INSTANCE_NAME }}"
+      run: |
+        terraform init \
+          -backend-config="bucket=$TF_BACKEND_s3" \
+          -backend-config="dynamodb_table=$TF_BACKEND_dynamodb" \
+          -backend-config="key=$TF_BACKEND_key"
     - name: terraform plan
       shell: bash
       if: ${{ inputs.action == 'plan' }}

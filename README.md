@@ -60,7 +60,15 @@ Search or Create AWS VPC and network infrastructure
   - **Public SG**: Allows all inbound/outbound traffic
   - **Private SG**: Allows traffic only from within VPC
 
+## Backend Configuration
+This action automatically configures Terraform to use S3 remote backend:
+- **Bucket**: Uses `$TF_BACKEND_s3` from backend setup action
+- **DynamoDB Table**: Uses `$TF_BACKEND_dynamodb` from backend setup action
+- **State Key**: `actions-aws-network/{INSTANCE_NAME}`
+
 ## Sample Usage
+
+**📝 Note**: This action requires the backend setup action to run first to provide the S3 bucket and DynamoDB table for Terraform state management.
 
 ### Apply (default) - Create or find existing network
 ```yml
