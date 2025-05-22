@@ -23,31 +23,38 @@ Search or Create AWS VPC and network infrastructure
 | name | description |
 | --- | --- |
 | `vpc_id` | <p>VPC ID</p> |
-| `subnet_public_id` | <p>Public subnet ID</p> |
-| `subnet_private_id` | <p>Private subnet ID</p> |
+| `subnet_public_id` | <p>First public subnet ID (backward compatibility)</p> |
+| `subnet_private_id` | <p>First private subnet ID (backward compatibility)</p> |
+| `subnet_public_ids` | <p>All public subnet IDs (comma-separated)</p> |
+| `subnet_private_ids` | <p>All private subnet IDs (comma-separated)</p> |
 | `nat_gateway_id` | <p>NAT Gateway ID</p> |
 | `sg_public_id` | <p>Public Security Group ID</p> |
 | `sg_private_id` | <p>Private Security Group ID</p> |
-| `instance` | <p>Instance name used for resources</p> |
 <!-- action-docs-outputs source="action.yml" -->
 
 ## Output Environment Variables (TF_VAR_)
 | name | description |
 | --- | --- |
 | `TF_VAR_vpc_id` | <p>VPC ID for use in subsequent Terraform</p> |
-| `TF_VAR_subnet_public_id` | <p>Public subnet ID for use in subsequent Terraform</p> |
-| `TF_VAR_subnet_private_id` | <p>Private subnet ID for use in subsequent Terraform</p> |
+| `TF_VAR_subnet_public_id` | <p>First public subnet ID for use in subsequent Terraform</p> |
+| `TF_VAR_subnet_private_id` | <p>First private subnet ID for use in subsequent Terraform</p> |
+| `TF_VAR_subnet_public_ids` | <p>All public subnet IDs (comma-separated) for use in subsequent Terraform</p> |
+| `TF_VAR_subnet_private_ids` | <p>All private subnet IDs (comma-separated) for use in subsequent Terraform</p> |
 | `TF_VAR_nat_gateway_id` | <p>NAT Gateway ID for use in subsequent Terraform</p> |
 | `TF_VAR_sg_public_id` | <p>Public Security Group ID for use in subsequent Terraform</p> |
 | `TF_VAR_sg_private_id` | <p>Private Security Group ID for use in subsequent Terraform</p> |
 
 ## Network Architecture Created
 - **VPC**: 10.0.0.0/16 with DNS support enabled
-- **Public Subnet**: 10.0.1.0/24 (AZ-a) with auto-assign public IP
-- **Private Subnet**: 10.0.2.0/24 (AZ-b)
+- **Public Subnets**: 2 subnets with /20 CIDR (4096 IPs each)
+  - Public-1: 10.0.0.0/20 (AZ-a) with auto-assign public IP
+  - Public-2: 10.0.16.0/20 (AZ-b) with auto-assign public IP
+- **Private Subnets**: 2 subnets with /20 CIDR (4096 IPs each)
+  - Private-1: 10.0.32.0/20 (AZ-a)
+  - Private-2: 10.0.48.0/20 (AZ-b)
 - **Internet Gateway**: For public internet access
-- **NAT Gateway**: In public subnet for private subnet internet access
-- **Route Tables**: Configured for public/private routing
+- **NAT Gateway**: Single NAT in first public subnet for cost efficiency
+- **Route Tables**: Configured for public/private routing (shared across subnets)
 - **Security Groups**:
   - **Public SG**: Allows all inbound/outbound traffic
   - **Private SG**: Allows traffic only from within VPC
@@ -79,8 +86,11 @@ jobs:
       - name: Deploy application to VPC
         run: |
           echo "VPC ID: $TF_VAR_vpc_id"
-          echo "Public Subnet: $TF_VAR_subnet_public_id"
-          echo "Private Subnet: $TF_VAR_subnet_private_id"
+          echo "First Public Subnet: $TF_VAR_subnet_public_id"
+          echo "First Private Subnet: $TF_VAR_subnet_private_id"
+          echo "All Public Subnets: $TF_VAR_subnet_public_ids"
+          echo "All Private Subnets: $TF_VAR_subnet_private_ids"
+          # Use arrays in subsequent Terraform: split(",", var.subnet_public_ids)
 ```
 
 ### Plan - Show what would be created

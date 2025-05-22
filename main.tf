@@ -23,27 +23,29 @@ resource "aws_internet_gateway" "main" {
   })
 }
 
-# Public Subnet
+# Public Subnets
 resource "aws_subnet" "public" {
+  count                   = 2
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[0]
+  cidr_block              = "10.0.${count.index * 16}.0/20"
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(local.tags, {
-    Name = "${var.instance}-public-subnet"
+    Name = "${var.instance}-public-subnet-${count.index + 1}"
     Type = "public"
   })
 }
 
-# Private Subnet
+# Private Subnets
 resource "aws_subnet" "private" {
+  count             = 2
   vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = data.aws_availability_zones.available.names[1]
+  cidr_block        = "10.0.${32 + count.index * 16}.0/20"
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.tags, {
-    Name = "${var.instance}-private-subnet"
+    Name = "${var.instance}-private-subnet-${count.index + 1}"
     Type = "private"
   })
 }
@@ -60,7 +62,7 @@ resource "aws_eip" "nat" {
 # NAT Gateway
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
+  subnet_id     = aws_subnet.public[0].id
   depends_on    = [aws_internet_gateway.main]
 
   tags = merge(local.tags, {
@@ -96,15 +98,17 @@ resource "aws_route_table" "private" {
   })
 }
 
-# Route Table Association for Public Subnet
+# Route Table Association for Public Subnets
 resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-# Route Table Association for Private Subnet
+# Route Table Association for Private Subnets
 resource "aws_route_table_association" "private" {
-  subnet_id      = aws_subnet.private.id
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
 }
 

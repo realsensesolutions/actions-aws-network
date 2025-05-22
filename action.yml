@@ -12,11 +12,17 @@ outputs:
     description: "VPC ID"
     value: ${{ steps.vpc.outputs.id || steps.provision-vpc.outputs.vpc_id }}
   subnet_public_id:
-    description: "Public subnet ID"
+    description: "First public subnet ID (backward compatibility)"
     value: ${{ steps.subnets.outputs.public_id || steps.provision-subnets.outputs.subnet_public_id }}
   subnet_private_id:
-    description: "Private subnet ID"
+    description: "First private subnet ID (backward compatibility)"
     value: ${{ steps.subnets.outputs.private_id || steps.provision-subnets.outputs.subnet_private_id }}
+  subnet_public_ids:
+    description: "All public subnet IDs (comma-separated)"
+    value: ${{ steps.subnets.outputs.public_ids || steps.provision-subnets.outputs.subnet_public_ids }}
+  subnet_private_ids:
+    description: "All private subnet IDs (comma-separated)"
+    value: ${{ steps.subnets.outputs.private_ids || steps.provision-subnets.outputs.subnet_private_ids }}
   nat_gateway_id:
     description: "NAT Gateway ID"
     value: ${{ steps.nat.outputs.id || steps.provision-nat.outputs.nat_gateway_id }}
@@ -58,24 +64,43 @@ runs:
           --query "ResourceTagMappingList[].ResourceARN" \
           --output text)
 
-        public_subnet=""
-        private_subnet=""
+        public_subnets=""
+        private_subnets=""
 
         for arn in $arns; do
           subnet_id=$(echo "$arn" | awk -F'/' '{print $2}')
           subnet_tags=$(aws ec2 describe-subnets --subnet-ids $subnet_id --query 'Subnets[0].Tags[?Key==`Type`].Value' --output text)
 
           if [ "$subnet_tags" = "public" ]; then
-            public_subnet=$subnet_id
+            if [ -z "$public_subnets" ]; then
+              public_subnets=$subnet_id
+            else
+              public_subnets="$public_subnets,$subnet_id"
+            fi
           elif [ "$subnet_tags" = "private" ]; then
-            private_subnet=$subnet_id
+            if [ -z "$private_subnets" ]; then
+              private_subnets=$subnet_id
+            else
+              private_subnets="$private_subnets,$subnet_id"
+            fi
           fi
         done
 
-        echo "TF_VAR_subnet_public_id=$public_subnet" >> $GITHUB_ENV
-        echo "TF_VAR_subnet_private_id=$private_subnet" >> $GITHUB_ENV
-        echo "public_id=$public_subnet" >> $GITHUB_OUTPUT
-        echo "private_id=$private_subnet" >> $GITHUB_OUTPUT
+        # Extract first subnet for backward compatibility
+        first_public=$(echo "$public_subnets" | cut -d',' -f1)
+        first_private=$(echo "$private_subnets" | cut -d',' -f1)
+
+        # Export both singular and plural environment variables
+        echo "TF_VAR_subnet_public_id=$first_public" >> $GITHUB_ENV
+        echo "TF_VAR_subnet_private_id=$first_private" >> $GITHUB_ENV
+        echo "TF_VAR_subnet_public_ids=$public_subnets" >> $GITHUB_ENV
+        echo "TF_VAR_subnet_private_ids=$private_subnets" >> $GITHUB_ENV
+
+        # Export both singular and plural outputs
+        echo "public_id=$first_public" >> $GITHUB_OUTPUT
+        echo "private_id=$first_private" >> $GITHUB_OUTPUT
+        echo "public_ids=$public_subnets" >> $GITHUB_OUTPUT
+        echo "private_ids=$private_subnets" >> $GITHUB_OUTPUT
     - name: query nat gateway
       shell: bash
       id: nat
@@ -161,10 +186,20 @@ runs:
       run: |
         SUBNET_PUBLIC_ID=$(terraform output -raw subnet_public_id)
         SUBNET_PRIVATE_ID=$(terraform output -raw subnet_private_id)
+        SUBNET_PUBLIC_IDS=$(terraform output -raw subnet_public_ids)
+        SUBNET_PRIVATE_IDS=$(terraform output -raw subnet_private_ids)
+
+        # Export both singular and plural environment variables
         echo "TF_VAR_subnet_public_id=$SUBNET_PUBLIC_ID" >> $GITHUB_ENV
         echo "TF_VAR_subnet_private_id=$SUBNET_PRIVATE_ID" >> $GITHUB_ENV
+        echo "TF_VAR_subnet_public_ids=$SUBNET_PUBLIC_IDS" >> $GITHUB_ENV
+        echo "TF_VAR_subnet_private_ids=$SUBNET_PRIVATE_IDS" >> $GITHUB_ENV
+
+        # Export both singular and plural outputs
         echo "subnet_public_id=$SUBNET_PUBLIC_ID" >> $GITHUB_OUTPUT
         echo "subnet_private_id=$SUBNET_PRIVATE_ID" >> $GITHUB_OUTPUT
+        echo "subnet_public_ids=$SUBNET_PUBLIC_IDS" >> $GITHUB_OUTPUT
+        echo "subnet_private_ids=$SUBNET_PRIVATE_IDS" >> $GITHUB_OUTPUT
     - name: set tf nat gateway
       working-directory: ${{ github.action_path }}
       shell: bash
