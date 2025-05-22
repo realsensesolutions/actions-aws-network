@@ -1,6 +1,12 @@
 name: Actions AWS Network Setup
 description: 'Search or Create AWS VPC and network infrastructure'
 
+inputs:
+  action:
+    description: 'Action to perform: plan, apply, or destroy'
+    required: false
+    default: 'apply'
+
 outputs:
   vpc_id:
     description: "VPC ID"
@@ -20,20 +26,19 @@ outputs:
   sg_private_id:
     description: "Private Security Group ID"
     value: ${{ steps.security_groups.outputs.private_id || steps.provision-security-groups.outputs.sg_private_id }}
-  instance:
-    description: "Instance name used for resources"
-    value: ${{ steps.set_instance_name.outputs.instance_name }}
+
 runs:
   using: "composite"
   steps:
     - name: query vpc
       shell: bash
       id: vpc
+      if: ${{ inputs.action != 'destroy' }}
       env:
         SERVICE: ec2:vpc
       run: |
         arn=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --tag-filters Key=$TF_VAR_instance,Values=true \
           --resource-type-filters $SERVICE \
           --query "ResourceTagMappingList[].ResourceARN" \
           --output text)
@@ -43,11 +48,12 @@ runs:
     - name: query subnets
       shell: bash
       id: subnets
+      if: ${{ inputs.action != 'destroy' }}
       env:
         SERVICE: ec2:subnet
       run: |
         arns=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --tag-filters Key=$TF_VAR_instance,Values=true \
           --resource-type-filters $SERVICE \
           --query "ResourceTagMappingList[].ResourceARN" \
           --output text)
@@ -73,12 +79,12 @@ runs:
     - name: query nat gateway
       shell: bash
       id: nat
+      if: ${{ inputs.action != 'destroy' }}
       env:
         SERVICE: ec2:natgateway
-        TAG_NAME: ${{ format('{0}-{1}', github.repository_owner, inputs.instance) }}
       run: |
         arn=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --tag-filters Key=$TF_VAR_instance,Values=true \
           --resource-type-filters $SERVICE \
           --query "ResourceTagMappingList[].ResourceARN" \
           --output text)
@@ -88,11 +94,12 @@ runs:
     - name: query security groups
       shell: bash
       id: security_groups
+      if: ${{ inputs.action != 'destroy' }}
       env:
         SERVICE: ec2:security-group
       run: |
         arns=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --tag-filters Key=$TF_VAR_instance,Values=true \
           --resource-type-filters $SERVICE \
           --query "ResourceTagMappingList[].ResourceARN" \
           --output text)
@@ -116,24 +123,33 @@ runs:
         echo "public_id=$public_sg" >> $GITHUB_OUTPUT
         echo "private_id=$private_sg" >> $GITHUB_OUTPUT
 
-    - name: init
+        - name: init
       shell: bash
-      if: ${{ !steps.vpc.outputs.id }}
       working-directory: ${{ github.action_path }}
       run: terraform init
+    - name: terraform plan
+      shell: bash
+      if: ${{ inputs.action == 'plan' }}
+      working-directory: ${{ github.action_path }}
+      run: |
+        terraform plan
     - name: terraform apply
       shell: bash
-      if: ${{ !steps.vpc.outputs.id }}
+      if: ${{ inputs.action == 'apply' && !steps.vpc.outputs.id }}
       working-directory: ${{ github.action_path }}
-      env:
-        TF_VAR_instance: ${{ env.INSTANCE_NAME }}
       run: |
         terraform apply -auto-approve
+    - name: terraform destroy
+      shell: bash
+      if: ${{ inputs.action == 'destroy' }}
+      working-directory: ${{ github.action_path }}
+      run: |
+        terraform destroy -auto-approve
     - name: set tf vpc
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-vpc
-      if: ${{ !steps.vpc.outputs.id }}
+      if: ${{ inputs.action == 'apply' && !steps.vpc.outputs.id }}
       run: |
         VPC_ID=$(terraform output -raw vpc_id)
         echo "TF_VAR_vpc_id=$VPC_ID" >> $GITHUB_ENV
@@ -142,7 +158,7 @@ runs:
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-subnets
-      if: ${{ !steps.vpc.outputs.id }}
+      if: ${{ inputs.action == 'apply' && !steps.vpc.outputs.id }}
       run: |
         SUBNET_PUBLIC_ID=$(terraform output -raw subnet_public_id)
         SUBNET_PRIVATE_ID=$(terraform output -raw subnet_private_id)
@@ -154,7 +170,7 @@ runs:
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-nat
-      if: ${{ !steps.vpc.outputs.id }}
+      if: ${{ inputs.action == 'apply' && !steps.vpc.outputs.id }}
       run: |
         NAT_GATEWAY_ID=$(terraform output -raw nat_gateway_id)
         echo "TF_VAR_nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_ENV
@@ -163,7 +179,7 @@ runs:
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-security-groups
-      if: ${{ !steps.vpc.outputs.id }}
+      if: ${{ inputs.action == 'apply' && !steps.vpc.outputs.id }}
       run: |
         SG_PUBLIC_ID=$(terraform output -raw sg_public_id)
         SG_PRIVATE_ID=$(terraform output -raw sg_private_id)

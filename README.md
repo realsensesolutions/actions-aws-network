@@ -14,7 +14,7 @@ Search or Create AWS VPC and network infrastructure
 
 | name | description | required | default |
 | --- | --- | --- | --- |
-| `instance` | <p>Unique identifier for infrastructure (optional, will use INSTANCE_NAME env var if available)</p> | `false` | `my-network` |
+| `action` | <p>Action to perform: plan, apply, or destroy</p> | `false` | `apply` |
 <!-- action-docs-inputs source="action.yml" -->
 
 <!-- action-docs-outputs source="action.yml" -->
@@ -54,7 +54,7 @@ Search or Create AWS VPC and network infrastructure
 
 ## Sample Usage
 
-### With setup action providing INSTANCE_NAME
+### Apply (default) - Create or find existing network
 ```yml
 permissions:
   id-token: write
@@ -72,38 +72,28 @@ jobs:
       - uses: alonch/actions-aws-backend-setup@main
         with:
           instance: demo
+      - uses: hashicorp/setup-terraform@v3
       - uses: alonch/actions-aws-network@main
-        # No instance input needed - uses INSTANCE_NAME from previous step
+        with:
+          action: apply  # optional, this is the default
       - name: Deploy application to VPC
         run: |
           echo "VPC ID: $TF_VAR_vpc_id"
           echo "Public Subnet: $TF_VAR_subnet_public_id"
           echo "Private Subnet: $TF_VAR_subnet_private_id"
-          # Your application deployment here using the network variables
 ```
 
-### Standalone usage
+### Plan - Show what would be created
 ```yml
-permissions:
-  id-token: write
-jobs:
-  apply:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repo
-        uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: us-east-1
-          role-to-assume: ${{ secrets.ROLE_ARN }}
-          role-session-name: ${{ github.actor }}
       - uses: alonch/actions-aws-network@main
         with:
-          instance: demo
-      - name: Deploy application to VPC
-        run: |
-          echo "VPC ID: $TF_VAR_vpc_id"
-          echo "Public Subnet: $TF_VAR_subnet_public_id"
-          echo "Private Subnet: $TF_VAR_subnet_private_id"
-          # Your application deployment here using the network variables
+          action: plan
 ```
+
+### Destroy - Remove network infrastructure
+```yml
+      - uses: alonch/actions-aws-network@main
+        with:
+          action: destroy
+```
+
