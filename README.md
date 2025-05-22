@@ -15,6 +15,7 @@ Search or Create AWS VPC and network infrastructure
 | name | description | required | default |
 | --- | --- | --- | --- |
 | `action` | <p>Action to perform: plan, apply, or destroy</p> | `false` | `apply` |
+| `force-apply` | <p>Force terraform apply even if resources already exist</p> | `false` | `false` |
 <!-- action-docs-inputs source="action.yml" -->
 
 <!-- action-docs-outputs source="action.yml" -->
@@ -106,4 +107,16 @@ jobs:
         with:
           action: destroy
 ```
+
+### Force Apply - Update existing infrastructure
+```yml
+      - uses: alonch/actions-aws-network@main
+        with:
+          action: apply
+          force-apply: true
+```
+**Use Cases:**
+- When Terraform configuration has changed (like adding subnets)
+- When you need to update existing resources to match new configuration
+- When resources exist but may not match current Terraform state
 

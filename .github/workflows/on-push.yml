@@ -27,6 +27,9 @@ jobs:
           instance: network
 
       - uses: ./
+        with:
+          action: apply
+          force-apply: true
 
       - run: |
           echo "${{ steps.backend.outputs.s3 }} - ${{ steps.backend.outputs.dynamodb }}"
