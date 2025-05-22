@@ -24,7 +24,7 @@ jobs:
       - uses: alonch/actions-aws-backend-setup@main
         id: backend
         with:
-          instance: network
+          instance: network-demo
 
       - uses: ./
         with:
