@@ -14,143 +14,32 @@ inputs:
 outputs:
   vpc_id:
     description: "VPC ID"
-    value: ${{ steps.vpc.outputs.id || steps.provision-vpc.outputs.vpc_id }}
+    value: ${{ steps.provision-vpc.outputs.vpc_id }}
   subnet_public_id:
     description: "First public subnet ID (backward compatibility)"
-    value: ${{ steps.subnets.outputs.public_id || steps.provision-subnets.outputs.subnet_public_id }}
+    value: ${{ steps.provision-subnets.outputs.subnet_public_id }}
   subnet_private_id:
     description: "First private subnet ID (backward compatibility)"
-    value: ${{ steps.subnets.outputs.private_id || steps.provision-subnets.outputs.subnet_private_id }}
+    value: ${{ steps.provision-subnets.outputs.subnet_private_id }}
   subnet_public_ids:
     description: "All public subnet IDs (comma-separated)"
-    value: ${{ steps.subnets.outputs.public_ids || steps.provision-subnets.outputs.subnet_public_ids }}
+    value: ${{ steps.provision-subnets.outputs.subnet_public_ids }}
   subnet_private_ids:
     description: "All private subnet IDs (comma-separated)"
-    value: ${{ steps.subnets.outputs.private_ids || steps.provision-subnets.outputs.subnet_private_ids }}
+    value: ${{ steps.provision-subnets.outputs.subnet_private_ids }}
   nat_gateway_id:
     description: "NAT Gateway ID"
-    value: ${{ steps.nat.outputs.id || steps.provision-nat.outputs.nat_gateway_id }}
+    value: ${{ steps.provision-nat.outputs.nat_gateway_id }}
   sg_public_id:
     description: "Public Security Group ID"
-    value: ${{ steps.security_groups.outputs.public_id || steps.provision-security-groups.outputs.sg_public_id }}
+    value: ${{ steps.provision-security-groups.outputs.sg_public_id }}
   sg_private_id:
     description: "Private Security Group ID"
-    value: ${{ steps.security_groups.outputs.private_id || steps.provision-security-groups.outputs.sg_private_id }}
+    value: ${{ steps.provision-security-groups.outputs.sg_private_id }}
 
 runs:
   using: "composite"
   steps:
-    - name: query vpc
-      shell: bash
-      id: vpc
-      if: ${{ inputs.action != 'destroy' }}
-      env:
-        SERVICE: ec2:vpc
-      run: |
-        arn=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$TF_VAR_instance,Values=true \
-          --resource-type-filters $SERVICE \
-          --query "ResourceTagMappingList[].ResourceARN" \
-          --output text)
-        vpc_id=$(echo "$arn" | awk -F'/' '{print $2}')
-        echo "TF_VAR_vpc_id=$vpc_id" >> $GITHUB_ENV
-        echo "id=$vpc_id" >> $GITHUB_OUTPUT
-    - name: query subnets
-      shell: bash
-      id: subnets
-      if: ${{ inputs.action != 'destroy' }}
-      env:
-        SERVICE: ec2:subnet
-      run: |
-        arns=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$TF_VAR_instance,Values=true \
-          --resource-type-filters $SERVICE \
-          --query "ResourceTagMappingList[].ResourceARN" \
-          --output text)
-
-        public_subnets=""
-        private_subnets=""
-
-        for arn in $arns; do
-          subnet_id=$(echo "$arn" | awk -F'/' '{print $2}')
-          subnet_tags=$(aws ec2 describe-subnets --subnet-ids $subnet_id --query 'Subnets[0].Tags[?Key==`Type`].Value' --output text)
-
-          if [ "$subnet_tags" = "public" ]; then
-            if [ -z "$public_subnets" ]; then
-              public_subnets=$subnet_id
-            else
-              public_subnets="$public_subnets,$subnet_id"
-            fi
-          elif [ "$subnet_tags" = "private" ]; then
-            if [ -z "$private_subnets" ]; then
-              private_subnets=$subnet_id
-            else
-              private_subnets="$private_subnets,$subnet_id"
-            fi
-          fi
-        done
-
-        # Extract first subnet for backward compatibility
-        first_public=$(echo "$public_subnets" | cut -d',' -f1)
-        first_private=$(echo "$private_subnets" | cut -d',' -f1)
-
-        # Export both singular and plural environment variables
-        echo "TF_VAR_subnet_public_id=$first_public" >> $GITHUB_ENV
-        echo "TF_VAR_subnet_private_id=$first_private" >> $GITHUB_ENV
-        echo "TF_VAR_subnet_public_ids=$public_subnets" >> $GITHUB_ENV
-        echo "TF_VAR_subnet_private_ids=$private_subnets" >> $GITHUB_ENV
-
-        # Export both singular and plural outputs
-        echo "public_id=$first_public" >> $GITHUB_OUTPUT
-        echo "private_id=$first_private" >> $GITHUB_OUTPUT
-        echo "public_ids=$public_subnets" >> $GITHUB_OUTPUT
-        echo "private_ids=$private_subnets" >> $GITHUB_OUTPUT
-    - name: query nat gateway
-      shell: bash
-      id: nat
-      if: ${{ inputs.action != 'destroy' }}
-      env:
-        SERVICE: ec2:natgateway
-      run: |
-        arn=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$TF_VAR_instance,Values=true \
-          --resource-type-filters $SERVICE \
-          --query "ResourceTagMappingList[].ResourceARN" \
-          --output text)
-        nat_id=$(echo "$arn" | awk -F'/' '{print $2}')
-        echo "TF_VAR_nat_gateway_id=$nat_id" >> $GITHUB_ENV
-        echo "id=$nat_id" >> $GITHUB_OUTPUT
-    - name: query security groups
-      shell: bash
-      id: security_groups
-      if: ${{ inputs.action != 'destroy' }}
-      env:
-        SERVICE: ec2:security-group
-      run: |
-        arns=$(aws resourcegroupstaggingapi get-resources \
-          --tag-filters Key=$TF_VAR_instance,Values=true \
-          --resource-type-filters $SERVICE \
-          --query "ResourceTagMappingList[].ResourceARN" \
-          --output text)
-
-        public_sg=""
-        private_sg=""
-
-        for arn in $arns; do
-          sg_id=$(echo "$arn" | awk -F'/' '{print $2}')
-          sg_tags=$(aws ec2 describe-security-groups --group-ids $sg_id --query 'SecurityGroups[0].Tags[?Key==`Type`].Value' --output text)
-
-          if [ "$sg_tags" = "public" ]; then
-            public_sg=$sg_id
-          elif [ "$sg_tags" = "private" ]; then
-            private_sg=$sg_id
-          fi
-        done
-
-        echo "TF_VAR_sg_public_id=$public_sg" >> $GITHUB_ENV
-        echo "TF_VAR_sg_private_id=$private_sg" >> $GITHUB_ENV
-        echo "public_id=$public_sg" >> $GITHUB_OUTPUT
-        echo "private_id=$private_sg" >> $GITHUB_OUTPUT
     - name: Terraform init for apply/plan
       shell: bash
       if: ${{ inputs.action != 'destroy' }}
@@ -181,7 +70,7 @@ runs:
         terraform plan
     - name: terraform apply
       shell: bash
-      if: ${{ inputs.action == 'apply' && (!steps.vpc.outputs.id || inputs.force-apply == 'true') }}
+      if: ${{ inputs.action == 'apply' }}
       working-directory: ${{ github.action_path }}
       run: |
         terraform apply -auto-approve
@@ -195,7 +84,7 @@ runs:
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-vpc
-      if: ${{ inputs.action == 'apply' && (!steps.vpc.outputs.id || inputs.force-apply == 'true') }}
+      if: ${{ inputs.action == 'apply' }}
       run: |
         VPC_ID=$(terraform output -raw vpc_id)
         echo "TF_VAR_vpc_id=$VPC_ID" >> $GITHUB_ENV
@@ -204,7 +93,7 @@ runs:
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-subnets
-      if: ${{ inputs.action == 'apply' && (!steps.vpc.outputs.id || inputs.force-apply == 'true') }}
+      if: ${{ inputs.action == 'apply' }}
       run: |
         SUBNET_PUBLIC_ID=$(terraform output -raw subnet_public_id)
         SUBNET_PRIVATE_ID=$(terraform output -raw subnet_private_id)
@@ -226,7 +115,7 @@ runs:
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-nat
-      if: ${{ inputs.action == 'apply' && (!steps.vpc.outputs.id || inputs.force-apply == 'true') }}
+      if: ${{ inputs.action == 'apply' }}
       run: |
         NAT_GATEWAY_ID=$(terraform output -raw nat_gateway_id)
         echo "TF_VAR_nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_ENV
@@ -235,7 +124,7 @@ runs:
       working-directory: ${{ github.action_path }}
       shell: bash
       id: provision-security-groups
-      if: ${{ inputs.action == 'apply' && (!steps.vpc.outputs.id || inputs.force-apply == 'true') }}
+      if: ${{ inputs.action == 'apply' }}
       run: |
         SG_PUBLIC_ID=$(terraform output -raw sg_public_id)
         SG_PRIVATE_ID=$(terraform output -raw sg_private_id)
