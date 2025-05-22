@@ -122,8 +122,7 @@ runs:
         echo "TF_VAR_sg_private_id=$private_sg" >> $GITHUB_ENV
         echo "public_id=$public_sg" >> $GITHUB_OUTPUT
         echo "private_id=$private_sg" >> $GITHUB_OUTPUT
-
-        - name: init
+    - name: init
       shell: bash
       working-directory: ${{ github.action_path }}
       run: terraform init
