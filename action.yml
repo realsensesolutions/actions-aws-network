@@ -1,0 +1,174 @@
+name: Actions AWS Network Setup
+description: 'Search or Create AWS VPC and network infrastructure'
+
+outputs:
+  vpc_id:
+    description: "VPC ID"
+    value: ${{ steps.vpc.outputs.id || steps.provision-vpc.outputs.vpc_id }}
+  subnet_public_id:
+    description: "Public subnet ID"
+    value: ${{ steps.subnets.outputs.public_id || steps.provision-subnets.outputs.subnet_public_id }}
+  subnet_private_id:
+    description: "Private subnet ID"
+    value: ${{ steps.subnets.outputs.private_id || steps.provision-subnets.outputs.subnet_private_id }}
+  nat_gateway_id:
+    description: "NAT Gateway ID"
+    value: ${{ steps.nat.outputs.id || steps.provision-nat.outputs.nat_gateway_id }}
+  sg_public_id:
+    description: "Public Security Group ID"
+    value: ${{ steps.security_groups.outputs.public_id || steps.provision-security-groups.outputs.sg_public_id }}
+  sg_private_id:
+    description: "Private Security Group ID"
+    value: ${{ steps.security_groups.outputs.private_id || steps.provision-security-groups.outputs.sg_private_id }}
+  instance:
+    description: "Instance name used for resources"
+    value: ${{ steps.set_instance_name.outputs.instance_name }}
+runs:
+  using: "composite"
+  steps:
+    - name: query vpc
+      shell: bash
+      id: vpc
+      env:
+        SERVICE: ec2:vpc
+      run: |
+        arn=$(aws resourcegroupstaggingapi get-resources \
+          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --resource-type-filters $SERVICE \
+          --query "ResourceTagMappingList[].ResourceARN" \
+          --output text)
+        vpc_id=$(echo "$arn" | awk -F'/' '{print $2}')
+        echo "TF_VAR_vpc_id=$vpc_id" >> $GITHUB_ENV
+        echo "id=$vpc_id" >> $GITHUB_OUTPUT
+    - name: query subnets
+      shell: bash
+      id: subnets
+      env:
+        SERVICE: ec2:subnet
+      run: |
+        arns=$(aws resourcegroupstaggingapi get-resources \
+          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --resource-type-filters $SERVICE \
+          --query "ResourceTagMappingList[].ResourceARN" \
+          --output text)
+
+        public_subnet=""
+        private_subnet=""
+
+        for arn in $arns; do
+          subnet_id=$(echo "$arn" | awk -F'/' '{print $2}')
+          subnet_tags=$(aws ec2 describe-subnets --subnet-ids $subnet_id --query 'Subnets[0].Tags[?Key==`Type`].Value' --output text)
+
+          if [ "$subnet_tags" = "public" ]; then
+            public_subnet=$subnet_id
+          elif [ "$subnet_tags" = "private" ]; then
+            private_subnet=$subnet_id
+          fi
+        done
+
+        echo "TF_VAR_subnet_public_id=$public_subnet" >> $GITHUB_ENV
+        echo "TF_VAR_subnet_private_id=$private_subnet" >> $GITHUB_ENV
+        echo "public_id=$public_subnet" >> $GITHUB_OUTPUT
+        echo "private_id=$private_subnet" >> $GITHUB_OUTPUT
+    - name: query nat gateway
+      shell: bash
+      id: nat
+      env:
+        SERVICE: ec2:natgateway
+        TAG_NAME: ${{ format('{0}-{1}', github.repository_owner, inputs.instance) }}
+      run: |
+        arn=$(aws resourcegroupstaggingapi get-resources \
+          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --resource-type-filters $SERVICE \
+          --query "ResourceTagMappingList[].ResourceARN" \
+          --output text)
+        nat_id=$(echo "$arn" | awk -F'/' '{print $2}')
+        echo "TF_VAR_nat_gateway_id=$nat_id" >> $GITHUB_ENV
+        echo "id=$nat_id" >> $GITHUB_OUTPUT
+    - name: query security groups
+      shell: bash
+      id: security_groups
+      env:
+        SERVICE: ec2:security-group
+      run: |
+        arns=$(aws resourcegroupstaggingapi get-resources \
+          --tag-filters Key=$INSTANCE_NAME,Values=true \
+          --resource-type-filters $SERVICE \
+          --query "ResourceTagMappingList[].ResourceARN" \
+          --output text)
+
+        public_sg=""
+        private_sg=""
+
+        for arn in $arns; do
+          sg_id=$(echo "$arn" | awk -F'/' '{print $2}')
+          sg_tags=$(aws ec2 describe-security-groups --group-ids $sg_id --query 'SecurityGroups[0].Tags[?Key==`Type`].Value' --output text)
+
+          if [ "$sg_tags" = "public" ]; then
+            public_sg=$sg_id
+          elif [ "$sg_tags" = "private" ]; then
+            private_sg=$sg_id
+          fi
+        done
+
+        echo "TF_VAR_sg_public_id=$public_sg" >> $GITHUB_ENV
+        echo "TF_VAR_sg_private_id=$private_sg" >> $GITHUB_ENV
+        echo "public_id=$public_sg" >> $GITHUB_OUTPUT
+        echo "private_id=$private_sg" >> $GITHUB_OUTPUT
+
+    - name: init
+      shell: bash
+      if: ${{ !steps.vpc.outputs.id }}
+      working-directory: ${{ github.action_path }}
+      run: terraform init
+    - name: terraform apply
+      shell: bash
+      if: ${{ !steps.vpc.outputs.id }}
+      working-directory: ${{ github.action_path }}
+      env:
+        TF_VAR_instance: ${{ env.INSTANCE_NAME }}
+      run: |
+        terraform apply -auto-approve
+    - name: set tf vpc
+      working-directory: ${{ github.action_path }}
+      shell: bash
+      id: provision-vpc
+      if: ${{ !steps.vpc.outputs.id }}
+      run: |
+        VPC_ID=$(terraform output -raw vpc_id)
+        echo "TF_VAR_vpc_id=$VPC_ID" >> $GITHUB_ENV
+        echo "vpc_id=$VPC_ID" >> $GITHUB_OUTPUT
+    - name: set tf subnets
+      working-directory: ${{ github.action_path }}
+      shell: bash
+      id: provision-subnets
+      if: ${{ !steps.vpc.outputs.id }}
+      run: |
+        SUBNET_PUBLIC_ID=$(terraform output -raw subnet_public_id)
+        SUBNET_PRIVATE_ID=$(terraform output -raw subnet_private_id)
+        echo "TF_VAR_subnet_public_id=$SUBNET_PUBLIC_ID" >> $GITHUB_ENV
+        echo "TF_VAR_subnet_private_id=$SUBNET_PRIVATE_ID" >> $GITHUB_ENV
+        echo "subnet_public_id=$SUBNET_PUBLIC_ID" >> $GITHUB_OUTPUT
+        echo "subnet_private_id=$SUBNET_PRIVATE_ID" >> $GITHUB_OUTPUT
+    - name: set tf nat gateway
+      working-directory: ${{ github.action_path }}
+      shell: bash
+      id: provision-nat
+      if: ${{ !steps.vpc.outputs.id }}
+      run: |
+        NAT_GATEWAY_ID=$(terraform output -raw nat_gateway_id)
+        echo "TF_VAR_nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_ENV
+        echo "nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_OUTPUT
+    - name: set tf security groups
+      working-directory: ${{ github.action_path }}
+      shell: bash
+      id: provision-security-groups
+      if: ${{ !steps.vpc.outputs.id }}
+      run: |
+        SG_PUBLIC_ID=$(terraform output -raw sg_public_id)
+        SG_PRIVATE_ID=$(terraform output -raw sg_private_id)
+        echo "TF_VAR_sg_public_id=$SG_PUBLIC_ID" >> $GITHUB_ENV
+        echo "TF_VAR_sg_private_id=$SG_PRIVATE_ID" >> $GITHUB_ENV
+        echo "sg_public_id=$SG_PUBLIC_ID" >> $GITHUB_OUTPUT
+        echo "sg_private_id=$SG_PRIVATE_ID" >> $GITHUB_OUTPUT
+

@@ -1,0 +1,33 @@
+name: demo
+on:
+  push:
+    branches:
+      - main
+env:
+  region: us-east-1
+jobs:
+
+
+  deploy:
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.region }}
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          role-session-name: ${{ github.repository_owner }}-${{ github.actor }}
+      - uses: alonch/actions-aws-backend-setup@main
+        id: backend
+        with:
+          instance: network
+
+      - uses: ./
+
+      - run: |
+          echo "${{ steps.backend.outputs.s3 }} - ${{ steps.backend.outputs.dynamodb }}"
+
