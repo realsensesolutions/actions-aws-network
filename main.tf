@@ -167,6 +167,10 @@ resource "aws_vpc_security_group_ingress_rule" "public_tcp_ipv4" {
   to_port           = 65535
   ip_protocol       = "tcp"
   description       = "Allow all TCP traffic from IPv4"
+  
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "public_udp_ipv4" {
