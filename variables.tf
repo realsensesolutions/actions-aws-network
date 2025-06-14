@@ -5,7 +5,7 @@ variable "instance" {
 variable "enable_nat_gateway" {
   description = "Enable NAT Gateway for IPv4 internet access from private subnets"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_egress_only_gateway" {
