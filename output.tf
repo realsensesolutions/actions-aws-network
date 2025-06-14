@@ -24,8 +24,8 @@ output "subnet_private_ids" {
 }
 
 output "nat_gateway_id" {
-  description = "The NAT Gateway ID"
-  value       = var.enable_nat_gateway ? aws_nat_gateway.main[0].id : null
+  description = "The NAT Gateway ID (empty if disabled)"
+  value       = try(var.enable_nat_gateway ? aws_nat_gateway.main[0].id : "", "")
 }
 
 output "egress_only_gateway_id" {
