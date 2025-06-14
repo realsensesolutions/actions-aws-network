@@ -110,25 +110,27 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
+  # IPv4 route through NAT Gateway (conditional)
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.main[0].id
+    }
+  }
+
+  # IPv6 route through Egress-Only Internet Gateway (conditional)
+  dynamic "route" {
+    for_each = var.enable_egress_only_gateway ? [1] : []
+    content {
+      ipv6_cidr_block        = "::/0"
+      egress_only_gateway_id = aws_egress_only_internet_gateway.main[0].id
+    }
+  }
+
   tags = merge(local.tags, {
     Name = "${var.instance}-private-rt"
   })
-}
-
-# IPv4 route through NAT Gateway (conditional)
-resource "aws_route" "private_ipv4_nat" {
-  count                  = var.enable_nat_gateway ? 1 : 0
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.main[0].id
-}
-
-# IPv6 route through Egress-Only Internet Gateway (conditional)
-resource "aws_route" "private_ipv6_egress" {
-  count                       = var.enable_egress_only_gateway ? 1 : 0
-  route_table_id              = aws_route_table.private.id
-  destination_ipv6_cidr_block = "::/0"
-  egress_only_gateway_id      = aws_egress_only_internet_gateway.main[0].id
 }
 
 # Route Table Association for Public Subnets
@@ -151,52 +153,65 @@ resource "aws_security_group" "public" {
   vpc_id      = aws_vpc.main.id
   description = "Public security group for ${var.instance}"
 
-  ingress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "udp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port        = 0
-    to_port          = 65535
-    protocol         = "tcp"
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  ingress {
-    from_port        = 0
-    to_port          = 65535
-    protocol         = "udp"
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
   tags = merge(local.tags, {
     Name = "${var.instance}-public-sg"
     Type = "public"
   })
+}
+
+# Public Security Group Rules
+resource "aws_security_group_rule" "public_ingress_tcp_ipv4" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.public.id
+}
+
+resource "aws_security_group_rule" "public_ingress_udp_ipv4" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "udp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.public.id
+}
+
+resource "aws_security_group_rule" "public_ingress_tcp_ipv6" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "tcp"
+  ipv6_cidr_blocks  = ["::/0"]
+  security_group_id = aws_security_group.public.id
+}
+
+resource "aws_security_group_rule" "public_ingress_udp_ipv6" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "udp"
+  ipv6_cidr_blocks  = ["::/0"]
+  security_group_id = aws_security_group.public.id
+}
+
+resource "aws_security_group_rule" "public_egress_all_ipv4" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.public.id
+}
+
+resource "aws_security_group_rule" "public_egress_all_ipv6" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  ipv6_cidr_blocks  = ["::/0"]
+  security_group_id = aws_security_group.public.id
 }
 
 # Private Security Group - allows traffic only within VPC
@@ -205,50 +220,63 @@ resource "aws_security_group" "private" {
   vpc_id      = aws_vpc.main.id
   description = "Private security group for ${var.instance}"
 
-  ingress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
-  }
-
-  ingress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "udp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
-  }
-
-  ingress {
-    from_port        = 0
-    to_port          = 65535
-    protocol         = "tcp"
-    ipv6_cidr_blocks = [aws_vpc.main.ipv6_cidr_block]
-  }
-
-  ingress {
-    from_port        = 0
-    to_port          = 65535
-    protocol         = "udp"
-    ipv6_cidr_blocks = [aws_vpc.main.ipv6_cidr_block]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
   tags = merge(local.tags, {
     Name = "${var.instance}-private-sg"
     Type = "private"
   })
+}
+
+# Private Security Group Rules
+resource "aws_security_group_rule" "private_ingress_tcp_ipv4" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "tcp"
+  cidr_blocks       = [aws_vpc.main.cidr_block]
+  security_group_id = aws_security_group.private.id
+}
+
+resource "aws_security_group_rule" "private_ingress_udp_ipv4" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "udp"
+  cidr_blocks       = [aws_vpc.main.cidr_block]
+  security_group_id = aws_security_group.private.id
+}
+
+resource "aws_security_group_rule" "private_ingress_tcp_ipv6" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "tcp"
+  ipv6_cidr_blocks  = [aws_vpc.main.ipv6_cidr_block]
+  security_group_id = aws_security_group.private.id
+}
+
+resource "aws_security_group_rule" "private_ingress_udp_ipv6" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "udp"
+  ipv6_cidr_blocks  = [aws_vpc.main.ipv6_cidr_block]
+  security_group_id = aws_security_group.private.id
+}
+
+resource "aws_security_group_rule" "private_egress_all_ipv4" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.private.id
+}
+
+resource "aws_security_group_rule" "private_egress_all_ipv6" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  ipv6_cidr_blocks  = ["::/0"]
+  security_group_id = aws_security_group.private.id
 }
