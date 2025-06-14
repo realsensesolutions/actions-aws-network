@@ -24,11 +24,11 @@ jobs:
       - uses: alonch/actions-aws-backend-setup@main
         id: backend
         with:
-          instance: network-demo
+          instance: webapp-demo-go
 
       - uses: ./
         with:
-          action: destroy
+          action: apply
 
       - run: |
           echo "${{ steps.backend.outputs.s3 }} - ${{ steps.backend.outputs.dynamodb }}"

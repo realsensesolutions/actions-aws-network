@@ -30,6 +30,12 @@ outputs:
   nat_gateway_id:
     description: "NAT Gateway ID"
     value: ${{ steps.provision-nat.outputs.nat_gateway_id }}
+  egress_only_gateway_id:
+    description: "Egress-Only Internet Gateway ID"
+    value: ${{ steps.provision-gateways.outputs.egress_only_gateway_id }}
+  vpc_ipv6_cidr_block:
+    description: "VPC IPv6 CIDR block"
+    value: ${{ steps.provision-vpc.outputs.vpc_ipv6_cidr_block }}
   sg_public_id:
     description: "Public Security Group ID"
     value: ${{ steps.provision-security-groups.outputs.sg_public_id }}
@@ -87,8 +93,11 @@ runs:
       if: ${{ inputs.action == 'apply' }}
       run: |
         VPC_ID=$(terraform output -raw vpc_id)
+        VPC_IPV6_CIDR=$(terraform output -raw vpc_ipv6_cidr_block)
         echo "TF_VAR_vpc_id=$VPC_ID" >> $GITHUB_ENV
+        echo "TF_VAR_vpc_ipv6_cidr_block=$VPC_IPV6_CIDR" >> $GITHUB_ENV
         echo "vpc_id=$VPC_ID" >> $GITHUB_OUTPUT
+        echo "vpc_ipv6_cidr_block=$VPC_IPV6_CIDR" >> $GITHUB_OUTPUT
     - name: set tf subnets
       working-directory: ${{ github.action_path }}
       shell: bash
@@ -120,6 +129,15 @@ runs:
         NAT_GATEWAY_ID=$(terraform output -raw nat_gateway_id)
         echo "TF_VAR_nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_ENV
         echo "nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_OUTPUT
+    - name: set tf gateways
+      working-directory: ${{ github.action_path }}
+      shell: bash
+      id: provision-gateways
+      if: ${{ inputs.action == 'apply' }}
+      run: |
+        EOIGW_ID=$(terraform output -raw egress_only_gateway_id)
+        echo "TF_VAR_egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_ENV
+        echo "egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_OUTPUT
     - name: set tf security groups
       working-directory: ${{ github.action_path }}
       shell: bash

@@ -128,3 +128,111 @@ jobs:
 - When you need to update existing resources to match new configuration
 - When resources exist but may not match current Terraform state
 
+# AWS Network Infrastructure with IPv6 and Egress-Only Internet Gateway
+
+This Terraform configuration creates a dual-stack (IPv4/IPv6) AWS VPC with support for both NAT Gateway and Egress-Only Internet Gateway for cost optimization.
+
+## Architecture
+
+- **VPC**: Dual-stack with IPv4 (10.0.0.0/16) and IPv6 CIDR blocks
+- **Public Subnets**: 2 subnets with IPv4 and IPv6 support
+- **Private Subnets**: 2 subnets with IPv4 and IPv6 support
+- **Internet Gateway**: For public subnet internet access (IPv4 and IPv6)
+- **NAT Gateway**: For private subnet IPv4 internet access (optional)
+- **Egress-Only Internet Gateway**: For private subnet IPv6 internet access (optional)
+
+## Cost Optimization Strategy
+
+### Current State (NAT Gateway)
+- NAT Gateway: ~$45-90/month + data processing charges
+- Elastic IP: ~$3.65/month
+
+### Target State (Egress-Only Internet Gateway)
+- Egress-Only Internet Gateway: $0/month (no hourly charges)
+- Data transfer: Same rates as NAT Gateway
+
+## Migration Strategy
+
+### Phase 1: Enable IPv6 Support (Current Implementation)
+Both NAT Gateway and Egress-Only Internet Gateway are enabled by default, allowing for gradual migration:
+
+```hcl
+enable_nat_gateway = true           # Keep existing IPv4 connectivity
+enable_egress_only_gateway = true   # Add IPv6 connectivity
+```
+
+### Phase 2: Test IPv6 Connectivity
+1. Deploy Lambda functions in private subnets
+2. Test external API calls over IPv6
+3. Verify EFS access works with dual-stack
+4. Monitor traffic patterns
+
+### Phase 3: Disable NAT Gateway (Future)
+Once IPv6 connectivity is validated:
+
+```hcl
+enable_nat_gateway = false          # Remove NAT Gateway
+enable_egress_only_gateway = true   # Keep IPv6 connectivity
+```
+
+## Usage
+
+### Basic Deployment
+```yaml
+- uses: your-org/actions-aws-network@main
+  with:
+    action: apply
+```
+
+### Custom Configuration
+```yaml
+- uses: your-org/actions-aws-network@main
+  with:
+    action: apply
+  env:
+    TF_VAR_enable_nat_gateway: "true"
+    TF_VAR_enable_egress_only_gateway: "true"
+```
+
+## Outputs
+
+- `vpc_id`: VPC ID
+- `vpc_ipv6_cidr_block`: IPv6 CIDR block of the VPC
+- `subnet_public_ids`: Public subnet IDs
+- `subnet_private_ids`: Private subnet IDs
+- `nat_gateway_id`: NAT Gateway ID (if enabled)
+- `egress_only_gateway_id`: Egress-Only Internet Gateway ID (if enabled)
+- `sg_public_id`: Public security group ID
+- `sg_private_id`: Private security group ID
+
+## Prerequisites for IPv6 Migration
+
+1. **External Services**: Verify all external APIs support IPv6
+2. **Lambda Runtime**: Ensure Lambda functions support IPv6 networking
+3. **EFS**: Confirm EFS supports IPv6 in your region
+4. **Application Code**: Check for hardcoded IPv4 addresses
+
+## Testing Checklist
+
+- [ ] Lambda functions can access internet via IPv6
+- [ ] EFS mounts work with IPv6
+- [ ] External API calls succeed over IPv6
+- [ ] Security groups allow necessary IPv6 traffic
+- [ ] Route tables correctly route IPv6 traffic
+
+## Rollback Plan
+
+If issues arise, disable Egress-Only Internet Gateway:
+
+```hcl
+enable_nat_gateway = true
+enable_egress_only_gateway = false
+```
+
+## Monitoring
+
+Use VPC Flow Logs to monitor traffic patterns:
+- IPv4 traffic through NAT Gateway
+- IPv6 traffic through Egress-Only Internet Gateway
+- Identify optimization opportunities
+

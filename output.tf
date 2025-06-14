@@ -25,7 +25,17 @@ output "subnet_private_ids" {
 
 output "nat_gateway_id" {
   description = "The NAT Gateway ID"
-  value       = aws_nat_gateway.main.id
+  value       = var.enable_nat_gateway ? aws_nat_gateway.main[0].id : null
+}
+
+output "egress_only_gateway_id" {
+  description = "The Egress-Only Internet Gateway ID"
+  value       = var.enable_egress_only_gateway ? aws_egress_only_internet_gateway.main[0].id : null
+}
+
+output "vpc_ipv6_cidr_block" {
+  description = "The IPv6 CIDR block of the VPC"
+  value       = aws_vpc.main.ipv6_cidr_block
 }
 
 output "sg_public_id" {
