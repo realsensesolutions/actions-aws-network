@@ -189,9 +189,38 @@ enable_egress_only_gateway = true   # Keep IPv6 connectivity
 - uses: your-org/actions-aws-network@main
   with:
     action: apply
-  env:
-    TF_VAR_enable_nat_gateway: "true"
-    TF_VAR_enable_egress_only_gateway: "true"
+    enable-nat-gateway: "true"          # Enable NAT Gateway (default: true)
+    enable-egress-only-gateway: "true"  # Enable Egress-Only Gateway (default: true)
+    lock-timeout: "10m"                 # Terraform lock timeout (default: 5m)
+```
+
+### Migration Scenarios
+
+#### Phase 1: Both Gateways (Default)
+```yaml
+- uses: your-org/actions-aws-network@main
+  with:
+    action: apply
+    enable-nat-gateway: "true"
+    enable-egress-only-gateway: "true"
+```
+
+#### Phase 2: IPv6 Only (Cost Optimized)
+```yaml
+- uses: your-org/actions-aws-network@main
+  with:
+    action: apply
+    enable-nat-gateway: "false"
+    enable-egress-only-gateway: "true"
+```
+
+#### Phase 3: IPv4 Only (Legacy)
+```yaml
+- uses: your-org/actions-aws-network@main
+  with:
+    action: apply
+    enable-nat-gateway: "true"
+    enable-egress-only-gateway: "false"
 ```
 
 ## Outputs

@@ -14,6 +14,14 @@ inputs:
     description: 'Time to wait for a state lock to be released'
     required: false
     default: '5m'
+  enable-nat-gateway:
+    description: 'Enable NAT Gateway for IPv4 internet access from private subnets'
+    required: false
+    default: 'false'
+  enable-egress-only-gateway:
+    description: 'Enable Egress-Only Internet Gateway for IPv6 internet access from private subnets'
+    required: false
+    default: 'true'
 
 outputs:
   vpc_id:
@@ -56,6 +64,8 @@ runs:
       working-directory: ${{ github.action_path }}
       env:
         TF_BACKEND_key: "actions-aws-network/${{ env.TF_VAR_instance }}"
+        TF_VAR_enable_nat_gateway: ${{ inputs.enable-nat-gateway }}
+        TF_VAR_enable_egress_only_gateway: ${{ inputs.enable-egress-only-gateway }}
       run: |
         terraform init -reconfigure \
           -lock-timeout=${{ inputs.lock-timeout }} \
@@ -78,18 +88,27 @@ runs:
       shell: bash
       if: ${{ inputs.action == 'plan' }}
       working-directory: ${{ github.action_path }}
+      env:
+        TF_VAR_enable_nat_gateway: ${{ inputs.enable-nat-gateway }}
+        TF_VAR_enable_egress_only_gateway: ${{ inputs.enable-egress-only-gateway }}
       run: |
         terraform plan -lock-timeout=${{ inputs.lock-timeout }}
     - name: terraform apply
       shell: bash
       if: ${{ inputs.action == 'apply' }}
       working-directory: ${{ github.action_path }}
+      env:
+        TF_VAR_enable_nat_gateway: ${{ inputs.enable-nat-gateway }}
+        TF_VAR_enable_egress_only_gateway: ${{ inputs.enable-egress-only-gateway }}
       run: |
         terraform apply -auto-approve -lock-timeout=${{ inputs.lock-timeout }}
     - name: terraform destroy
       shell: bash
       if: ${{ inputs.action == 'destroy' }}
       working-directory: ${{ github.action_path }}
+      env:
+        TF_VAR_enable_nat_gateway: ${{ inputs.enable-nat-gateway }}
+        TF_VAR_enable_egress_only_gateway: ${{ inputs.enable-egress-only-gateway }}
       run: |
         terraform destroy -auto-approve
     - name: set tf vpc
@@ -146,9 +165,14 @@ runs:
       id: provision-gateways
       if: ${{ inputs.action == 'apply' }}
       run: |
-        EOIGW_ID=$(terraform output -raw egress_only_gateway_id)
-        echo "TF_VAR_egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_ENV
-        echo "egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_OUTPUT
+        EOIGW_ID=$(terraform output -raw egress_only_gateway_id || echo "")
+        if [ -n "$EOIGW_ID" ]; then
+          echo "TF_VAR_egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_ENV
+          echo "egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_OUTPUT
+        else
+          echo "TF_VAR_egress_only_gateway_id=" >> $GITHUB_ENV
+          echo "egress_only_gateway_id=" >> $GITHUB_OUTPUT
+        fi
     - name: set tf security groups
       working-directory: ${{ github.action_path }}
       shell: bash

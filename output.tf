@@ -29,8 +29,8 @@ output "nat_gateway_id" {
 }
 
 output "egress_only_gateway_id" {
-  description = "The Egress-Only Internet Gateway ID"
-  value       = var.enable_egress_only_gateway ? aws_egress_only_internet_gateway.main[0].id : null
+  description = "The Egress-Only Internet Gateway ID (empty if disabled)"
+  value       = try(var.enable_egress_only_gateway ? aws_egress_only_internet_gateway.main[0].id : "", "")
 }
 
 output "vpc_ipv6_cidr_block" {
