@@ -117,8 +117,9 @@ runs:
       id: provision-vpc
       if: ${{ inputs.action == 'apply' }}
       run: |
-        VPC_ID=$(terraform output -raw vpc_id)
-        VPC_IPV6_CIDR=$(terraform output -raw vpc_ipv6_cidr_block)
+        TF_OUTPUTS=$(terraform output -json)
+        VPC_ID=$(echo "$TF_OUTPUTS" | jq -r ".vpc_id.value")
+        VPC_IPV6_CIDR=$(echo "$TF_OUTPUTS" | jq -r ".vpc_ipv6_cidr_block.value")
         echo "TF_VAR_vpc_id=$VPC_ID" >> $GITHUB_ENV
         echo "TF_VAR_vpc_ipv6_cidr_block=$VPC_IPV6_CIDR" >> $GITHUB_ENV
         echo "vpc_id=$VPC_ID" >> $GITHUB_OUTPUT
@@ -129,10 +130,11 @@ runs:
       id: provision-subnets
       if: ${{ inputs.action == 'apply' }}
       run: |
-        SUBNET_PUBLIC_ID=$(terraform output -raw subnet_public_id)
-        SUBNET_PRIVATE_ID=$(terraform output -raw subnet_private_id)
-        SUBNET_PUBLIC_IDS=$(terraform output -raw subnet_public_ids)
-        SUBNET_PRIVATE_IDS=$(terraform output -raw subnet_private_ids)
+        TF_OUTPUTS=$(terraform output -json)
+        SUBNET_PUBLIC_ID=$(echo "$TF_OUTPUTS" | jq -r ".subnet_public_id.value")
+        SUBNET_PRIVATE_ID=$(echo "$TF_OUTPUTS" | jq -r ".subnet_private_id.value")
+        SUBNET_PUBLIC_IDS=$(echo "$TF_OUTPUTS" | jq -r ".subnet_public_ids.value")
+        SUBNET_PRIVATE_IDS=$(echo "$TF_OUTPUTS" | jq -r ".subnet_private_ids.value")
 
         # Export both singular and plural environment variables
         echo "TF_VAR_subnet_public_id=$SUBNET_PUBLIC_ID" >> $GITHUB_ENV
@@ -151,7 +153,7 @@ runs:
       id: provision-nat
       if: ${{ inputs.action == 'apply' }}
       run: |
-        NAT_GATEWAY_ID=$(terraform output -raw nat_gateway_id || echo "")
+        NAT_GATEWAY_ID=$(terraform output -json | jq -r ".nat_gateway_id.value // empty")
         if [ -n "$NAT_GATEWAY_ID" ]; then
           echo "TF_VAR_nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_ENV
           echo "nat_gateway_id=$NAT_GATEWAY_ID" >> $GITHUB_OUTPUT
@@ -165,7 +167,7 @@ runs:
       id: provision-gateways
       if: ${{ inputs.action == 'apply' }}
       run: |
-        EOIGW_ID=$(terraform output -raw egress_only_gateway_id || echo "")
+        EOIGW_ID=$(terraform output -json | jq -r ".egress_only_gateway_id.value // empty")
         if [ -n "$EOIGW_ID" ]; then
           echo "TF_VAR_egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_ENV
           echo "egress_only_gateway_id=$EOIGW_ID" >> $GITHUB_OUTPUT
@@ -179,8 +181,9 @@ runs:
       id: provision-security-groups
       if: ${{ inputs.action == 'apply' }}
       run: |
-        SG_PUBLIC_ID=$(terraform output -raw sg_public_id)
-        SG_PRIVATE_ID=$(terraform output -raw sg_private_id)
+        TF_OUTPUTS=$(terraform output -json)
+        SG_PUBLIC_ID=$(echo "$TF_OUTPUTS" | jq -r ".sg_public_id.value")
+        SG_PRIVATE_ID=$(echo "$TF_OUTPUTS" | jq -r ".sg_private_id.value")
         echo "TF_VAR_sg_public_id=$SG_PUBLIC_ID" >> $GITHUB_ENV
         echo "TF_VAR_sg_private_id=$SG_PRIVATE_ID" >> $GITHUB_ENV
         echo "sg_public_id=$SG_PUBLIC_ID" >> $GITHUB_OUTPUT
